@@ -13,7 +13,7 @@ const int buttonPin = 7;
 const int huePot = A0;
 const int brightPot = A1;
 
-enum Effects { COLOR_RIPPLE, SINELON_LINGER, SINELON, TWINKLE, SOLID_COLOR, RAINBOW, COLOR_WIPE, BPM, NUM_EFFECTS };
+enum Effects { SOLID_COLOR, SINELON, SINELON_LINGER, HUE_RIPPLE, RAINBOW, COLOR_RIPPLE, BPM, NUM_EFFECTS };
 int currentEffect = 0;           // Current effect index
 unsigned long lastButtonPress = 0; // Time of the last button press
 bool lastButtonState = LOW;      // Previous state of the button
@@ -46,29 +46,25 @@ void loop() {
 
   lastButtonState = currentButtonState;  // Update the button state
 
-  // Call the current effect
   switch (currentEffect) {
-    case COLOR_RIPPLE:
-      colorRippleEffect(hue);
-    break;
-    case SINELON_LINGER:
-      sinelonLingerEffect(hue);  // Pass the dynamic hue to sinelonEffect
+    case SOLID_COLOR:
+      solidColorEffect(hue);  
     break;
     case SINELON:
-      sinelonEffect(hue);  // Pass the dynamic hue to sinelonEffect
+      sinelonEffect(hue);  
     break;
-    case TWINKLE:
-      twinkleEffect(hue);  // Pass the dynamic hue to twinkleEffect
+    case SINELON_LINGER:
+      sinelonLingerEffect(hue); 
     break;
-    case SOLID_COLOR:
-      solidColorEffect(hue);  // Pass the dynamic hue value from the potentiometer
+    case HUE_RIPPLE:
+      hueRippleEffect(hue);
     break;
     case RAINBOW:
       rainbowEffect();
       break;
-    case COLOR_WIPE:
-      colorWipeEffect(hue);  // Pass the dynamic hue to colorWipeEffect
-      break;
+    case COLOR_RIPPLE:
+      colorRippleEffect(hue);
+    break;
     case BPM:
       bpmEffect();
       break;
@@ -76,19 +72,17 @@ void loop() {
 
   FastLED.show();  // Display the current effect
   
-  // Send LED data to serial (send the RGB values of each LED)
-  for (int i = 0; i < NUM_LEDS; i++) {
-    Serial.print(leds[i].r); Serial.print(",");
-    Serial.print(leds[i].g); Serial.print(",");
-    Serial.print(leds[i].b);
-    if (i < NUM_LEDS - 1) Serial.print("|");  // Separator for each LED
-  }
-  Serial.println();  // End the line to mark end of LED data
+  // // Send LED data to serial (send the RGB values of each LED)
+  // for (int i = 0; i < NUM_LEDS; i++) {
+  //   Serial.print(leds[i].r); Serial.print(",");
+  //   Serial.print(leds[i].g); Serial.print(",");
+  //   Serial.print(leds[i].b);
+  //   if (i < NUM_LEDS - 1) Serial.print("|");  // Separator for each LED
+  // }
+  // Serial.println();  // End the line to mark end of LED data
 
   delay(20);  // Small delay for smoother animation
 }
-
-// Existing Effects:
 
 void rainbowEffect() {
   static uint8_t hue = 0;
@@ -101,17 +95,6 @@ void solidColorEffect(int hue) {
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CHSV(hue, 255, 255);  // Full saturation and brightness for a solid color
   }
-}
-
-void colorWipeEffect(int hue) {
-  // Fade out all the LEDs gradually
-  fadeToBlackBy(leds, NUM_LEDS, 20);
-  
-  // Get a position that bounces back and forth across the LED strip
-  int ledIndex = beatsin16(13, 0, NUM_LEDS - 1);  // Slow bounce effect
-  
-  // Set the LED at the current position to the hue from the potentiometer
-  leds[ledIndex] = CHSV(hue, 255, 255);  // Full brightness and saturation
 }
 
 void sinelonEffect(int hue) {
@@ -134,28 +117,10 @@ void sinelonLingerEffect(int hue) {
     hsv.val = scale8(hsv.val, 250);  // Adjust fading speed here
     leds[i] = hsv;
   }
-
   int pos = beatsin16(13, 0, NUM_LEDS - 1);
   leds[pos] = CHSV(hue, 255, 255);
 }
 
-void twinkleEffect(int hue) {
-  int hueRange = 20;  
-  int speed = 50;
-
-  for (int i = 0; i < NUM_LEDS; i++) {
-    if (random8() < 10) {
-      int randomHue = hue + random8(-hueRange, hueRange + 1);
-      if (randomHue < 0) randomHue += 255;
-      if (randomHue > 255) randomHue -= 255;
-      leds[i] = CHSV(randomHue, 255, random8(128, 255));
-    } else {
-      leds[i].fadeToBlackBy(speed);
-    }
-  }
-  
-  delay(map(speed, 0, 255, 50, 5));
-}
 
 void colorRippleEffect(int hue) {
   static int center = random16(NUM_LEDS);  
@@ -163,7 +128,6 @@ void colorRippleEffect(int hue) {
   int rippleSpeed = 5;
 
   fadeToBlackBy(leds, NUM_LEDS, 20);
-
   for (int i = 0; i < NUM_LEDS; i++) {
     int distance = abs(i - center);  
     if (distance == rippleStep) {
@@ -171,12 +135,33 @@ void colorRippleEffect(int hue) {
       leds[i] = CHSV(rippleHue, 255, 255);
     }
   }
-
   rippleStep++;
   if (rippleStep >= NUM_LEDS / 2) {
     center = random16(NUM_LEDS);  
     rippleStep = 0;
   }
+  delay(rippleSpeed);
+}
 
+void hueRippleEffect(int hue) {
+  int hueRange = 100;
+  static int center = random16(NUM_LEDS);  
+  static int rippleStep = 0;  
+  int rippleSpeed = 3; // Speed of the ripple effect
+
+  fadeToBlackBy(leds, NUM_LEDS, 20);
+  for (int i = 0; i < NUM_LEDS; i++) {
+    int distance = abs(i - center);  
+    if (distance == rippleStep) {
+      int rippleHue = hue + (distance * hueRange / (NUM_LEDS / 2)) % 255; // Modifying hue based on the distance from center
+      if (rippleHue > 255) rippleHue -= 255; // Ensure hue is within 0-255
+      leds[i] = CHSV(rippleHue, 255, 255); // Set color with full saturation and brightness
+    }
+  }
+  rippleStep++;
+  if (rippleStep >= NUM_LEDS / 2) {
+    center = random16(NUM_LEDS);  
+    rippleStep = 0; // Reset ripple step and randomly choose a new center
+  }
   delay(rippleSpeed);
 }

@@ -13,7 +13,7 @@ const int buttonPin = 7;
 const int huePot = A0;
 const int brightPot = A1;
 
-enum Effects { SINELON_LINGER, SINELON, TWINKLE, SOLID_COLOR, RAINBOW, COLOR_WIPE, BPM,  NUM_EFFECTS };
+enum Effects { COLOR_RIPPLE, SINELON_LINGER, SINELON, TWINKLE, SOLID_COLOR, RAINBOW, COLOR_WIPE, BPM,  NUM_EFFECTS };
 int currentEffect = 0;           // Current effect index
 unsigned long lastButtonPress = 0; // Time of the last button press
 bool lastButtonState = LOW;      // Previous state of the button
@@ -47,6 +47,9 @@ void loop() {
 
   // Call the current effect
   switch (currentEffect) {
+    case COLOR_RIPPLE:
+      colorRippleEffect(hue);
+    break;
     case SINELON_LINGER:
       sinelonLingerEffect(hue);  // Pass the dynamic hue to sinelonEffect
     break;
@@ -168,5 +171,31 @@ void twinkleEffect(int hue) {
   delay(map(speed, 0, 255, 50, 5));  // Map speed to a delay (higher speed means shorter delay)
 }
 
+void colorRippleEffect(int hue) {
+  static int center = random16(NUM_LEDS);  // Start ripple at random position
+  static int rippleStep = 0;  // Step of the ripple's spread
+  int rippleSpeed = 5;  // Speed of the ripple spreading
+
+  // Fade out all LEDs
+  fadeToBlackBy(leds, NUM_LEDS, 20);
+
+  // Set color for the ripple at current step
+  for (int i = 0; i < NUM_LEDS; i++) {
+    int distance = abs(i - center);  // Distance from the center of the ripple
+    if (distance == rippleStep) {
+      int rippleHue = hue + (distance * 5) % 255;  // Change hue based on distance
+      leds[i] = CHSV(rippleHue, 255, 255);  // Full saturation and brightness
+    }
+  }
+
+  // Move the ripple outwards
+  rippleStep++;
+  if (rippleStep >= NUM_LEDS / 2) {
+    center = random16(NUM_LEDS);  // Start a new ripple at random position
+    rippleStep = 0;
+  }
+
+  delay(rippleSpeed);
+}
 
 

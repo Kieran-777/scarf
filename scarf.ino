@@ -13,7 +13,7 @@ const int buttonPin = 7;
 const int huePot = A0;
 const int brightPot = A1;
 
-enum Effects { COLOR_RIPPLE, SINELON_LINGER, SINELON, TWINKLE, SOLID_COLOR, RAINBOW, COLOR_WIPE, BPM,  NUM_EFFECTS };
+enum Effects { COLOR_RIPPLE, SINELON_LINGER, SINELON, TWINKLE, SOLID_COLOR, RAINBOW, COLOR_WIPE, BPM, NUM_EFFECTS };
 int currentEffect = 0;           // Current effect index
 unsigned long lastButtonPress = 0; // Time of the last button press
 bool lastButtonState = LOW;      // Previous state of the button
@@ -23,6 +23,7 @@ void setup() {
   pinMode(buttonPin, INPUT_PULLUP);  // Set the button pin as input with pull-up
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(100);  // Default brightness
+  Serial.begin(115200);  // Initialize the serial communication
 }
 
 void loop() {
@@ -71,11 +72,20 @@ void loop() {
     case BPM:
       bpmEffect();
       break;
-
   }
 
   FastLED.show();  // Display the current effect
-  delay(20);       // Small delay for smoother animation
+  
+  // Send LED data to serial (send the RGB values of each LED)
+  for (int i = 0; i < NUM_LEDS; i++) {
+    Serial.print(leds[i].r); Serial.print(",");
+    Serial.print(leds[i].g); Serial.print(",");
+    Serial.print(leds[i].b);
+    if (i < NUM_LEDS - 1) Serial.print("|");  // Separator for each LED
+  }
+  Serial.println();  // End the line to mark end of LED data
+
+  delay(20);  // Small delay for smoother animation
 }
 
 // Existing Effects:
@@ -104,15 +114,12 @@ void colorWipeEffect(int hue) {
   leds[ledIndex] = CHSV(hue, 255, 255);  // Full brightness and saturation
 }
 
-
-// Sinelon Effect with hue control
 void sinelonEffect(int hue) {
   fadeToBlackBy(leds, NUM_LEDS, 20);
   int pos = beatsin16(13, 0, NUM_LEDS - 1);
   leds[pos] += CHSV(hue, 255, 192);  // Moving dot with hue control
 }
 
-// BPM Pulse Effect
 void bpmEffect() {
   uint8_t beat = beatsin8(62, 64, 255);  // Beats per minute
   for (int i = 0; i < NUM_LEDS; i++) {
@@ -121,81 +128,55 @@ void bpmEffect() {
 }
 
 void sinelonLingerEffect(int hue) {
-  // Gradually fade out all LEDs and shift hue
   for (int i = 0; i < NUM_LEDS; i++) {
-    // Convert the current color to HSV so we can manipulate the hue
     CHSV hsv = rgb2hsv_approximate(leds[i]);
-    
-    // Shift the hue slightly and keep it within 0-255 range
     hsv.hue += 1;
-
-    // Scale down the brightness (like fading out)
     hsv.val = scale8(hsv.val, 250);  // Adjust fading speed here
-
-    // Convert back to RGB and apply to the LED
     leds[i] = hsv;
   }
 
-  // Calculate the position of the moving dot using beatsin16
   int pos = beatsin16(13, 0, NUM_LEDS - 1);
-  
-  // Set the moving LED to a bright color with hue from potentiometer
-  leds[pos] = CHSV(hue, 255, 255);  // Full brightness and saturation for the moving LED
+  leds[pos] = CHSV(hue, 255, 255);
 }
 
-
 void twinkleEffect(int hue) {
-  int hueRange = 20;  // Range for twinkling hue variation
-   int speed = 50;
-  
-  // Iterate through all LEDs
-  for (int i = 0; i < NUM_LEDS; i++) {
-    // Random chance for each LED to twinkle
-    if (random8() < 10) {  // Adjust the '10' to control the density of twinkles
-      // Choose a random hue within the specified range around the main hue
-      int randomHue = hue + random8(-hueRange, hueRange + 1);  // Add or subtract up to hueRange
+  int hueRange = 20;  
+  int speed = 50;
 
-      // Ensure the hue stays within the 0-255 range
+  for (int i = 0; i < NUM_LEDS; i++) {
+    if (random8() < 10) {
+      int randomHue = hue + random8(-hueRange, hueRange + 1);
       if (randomHue < 0) randomHue += 255;
       if (randomHue > 255) randomHue -= 255;
-
-      // Set the LED to a bright color with a bit of randomness in brightness
       leds[i] = CHSV(randomHue, 255, random8(128, 255));
     } else {
-      // Gradually fade out the LEDs
-      leds[i].fadeToBlackBy(speed);  // Use speed to control the fade speed
+      leds[i].fadeToBlackBy(speed);
     }
   }
   
-  // Introduce a delay to control the speed of the overall twinkling effect
-  delay(map(speed, 0, 255, 50, 5));  // Map speed to a delay (higher speed means shorter delay)
+  delay(map(speed, 0, 255, 50, 5));
 }
 
 void colorRippleEffect(int hue) {
-  static int center = random16(NUM_LEDS);  // Start ripple at random position
-  static int rippleStep = 0;  // Step of the ripple's spread
-  int rippleSpeed = 5;  // Speed of the ripple spreading
+  static int center = random16(NUM_LEDS);  
+  static int rippleStep = 0;  
+  int rippleSpeed = 5;
 
-  // Fade out all LEDs
   fadeToBlackBy(leds, NUM_LEDS, 20);
 
-  // Set color for the ripple at current step
   for (int i = 0; i < NUM_LEDS; i++) {
-    int distance = abs(i - center);  // Distance from the center of the ripple
+    int distance = abs(i - center);  
     if (distance == rippleStep) {
-      int rippleHue = hue + (distance * 5) % 255;  // Change hue based on distance
-      leds[i] = CHSV(rippleHue, 255, 255);  // Full saturation and brightness
+      int rippleHue = hue + (distance * 5) % 255;
+      leds[i] = CHSV(rippleHue, 255, 255);
     }
   }
 
-  // Move the ripple outwards
   rippleStep++;
   if (rippleStep >= NUM_LEDS / 2) {
-    center = random16(NUM_LEDS);  // Start a new ripple at random position
+    center = random16(NUM_LEDS);  
     rippleStep = 0;
   }
 
   delay(rippleSpeed);
 }
-
-
